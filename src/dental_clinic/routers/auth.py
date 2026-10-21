@@ -1,13 +1,10 @@
-
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
-from dental_clinic.core.security import hash_password
-from dental_clinic.db.database import get_db
-from dental_clinic.models.user import User
+from dental_clinic.db.session import get_db
+from dental_clinic.schemas.auth import LoginRequest, TokenResponse
 from dental_clinic.schemas.user import UserCreate, UserResponse
+from dental_clinic.services.auth import authenticate_user, register_user
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -20,37 +17,14 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 def signup(
     user_data: UserCreate,
     db: Session = Depends(get_db),
-) -> User:
-    email = str(user_data.email).lower()
+) -> UserResponse:
+    return register_user(user_data, db)
 
-    # Check whether the email is already registered.
-    existing_user = db.scalar(select(User).where(User.email == email))
 
-    if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Email already registered",
-        )
-
-    # Create a new user. Never store the plain password.
-    new_user = User(
-        full_name=user_data.full_name,
-        email=email,
-        hashed_password=hash_password(user_data.password),
-    )
-
-    db.add(new_user)
-
-    try:
-        db.commit()
-        db.refresh(new_user)
-    except IntegrityError as exc:
-        db.rollback()
-        if db.scalar(select(User.id).where(User.email == email)) is not None:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Email already registered",
-            ) from exc
-        raise
-
-    return new_user
+@router.post("/login", response_model=TokenResponse)
+def login(
+    credentials: LoginRequest,
+    db: Session = Depends(get_db),
+) -> TokenResponse:
+    access_token = authenticate_user(credentials, db)
+    return TokenResponse(access_token=access_token)

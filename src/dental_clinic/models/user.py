@@ -2,7 +2,7 @@
 from sqlalchemy import Boolean, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from dental_clinic.db.database import Base
+from dental_clinic.db.base import Base
 
 
 class User(Base):
